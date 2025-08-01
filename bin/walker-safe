@@ -1,0 +1,6 @@
+#!/bin/bash
+# Walker wrapper to disable Vulkan just for this app
+VK_ICD_FILENAMES=/dev/null \
+VK_LAYER_PATH=/dev/null \
+GSK_RENDERER=gl \
+exec walker "$@"
