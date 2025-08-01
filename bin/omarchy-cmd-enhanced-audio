@@ -1,0 +1,416 @@
+#!/bin/bash
+# Enhanced audio control for MacBook Pro M1
+# Supports PulseAudio, PipeWire, and advanced audio interface detection
+# Integrates with existing omarchy-asahi audio infrastructure
+
+# Source hardware configuration
+HARDWARE_CONF="$HOME/.config/omarchy/hardware.conf"
+if [[ -f "$HARDWARE_CONF" ]]; then
+    source "$HARDWARE_CONF"
+else
+    echo "Hardware configuration not found. Run hardware detection first:"
+    echo "~/.local/share/omarchy/install/config/hardware-detection.sh"
+    exit 1
+fi
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to control output volume
+control_output_volume() {
+    local action="$1"
+    local value="$2"
+    local success=false
+    
+    if [[ "$PAMIXER_AVAILABLE" == "true" ]]; then
+        case "$action" in
+            up|raise|+*)
+                pamixer -i 5 >/dev/null 2>&1 && success=true
+                ;;
+            down|lower|-*)
+                pamixer -d 5 >/dev/null 2>&1 && success=true
+                ;;
+            set)
+                if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]; then
+                    pamixer --set-volume "$value" >/dev/null 2>&1 && success=true
+                fi
+                ;;
+            mute)
+                pamixer -m >/dev/null 2>&1 && success=true
+                ;;
+            unmute)
+                pamixer -u >/dev/null 2>&1 && success=true
+                ;;
+            toggle-mute)
+                pamixer -t >/dev/null 2>&1 && success=true
+                ;;
+            get)
+                pamixer --get-volume 2>/dev/null
+                return $?
+                ;;
+            get-mute)
+                pamixer --get-mute 2>/dev/null
+                return $?
+                ;;
+        esac
+    elif [[ "$AUDIO_SYSTEM" == "pulseaudio" ]]; then
+        # Fallback to direct PulseAudio commands
+        case "$action" in
+            up|raise|+*)
+                pactl set-sink-volume @DEFAULT_SINK@ +5% >/dev/null 2>&1 && success=true
+                ;;
+            down|lower|-*)
+                pactl set-sink-volume @DEFAULT_SINK@ -5% >/dev/null 2>&1 && success=true
+                ;;
+            set)
+                if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]; then
+                    pactl set-sink-volume @DEFAULT_SINK@ "$value%" >/dev/null 2>&1 && success=true
+                fi
+                ;;
+            mute)
+                pactl set-sink-mute @DEFAULT_SINK@ 1 >/dev/null 2>&1 && success=true
+                ;;
+            unmute)
+                pactl set-sink-mute @DEFAULT_SINK@ 0 >/dev/null 2>&1 && success=true
+                ;;
+            toggle-mute)
+                pactl set-sink-mute @DEFAULT_SINK@ toggle >/dev/null 2>&1 && success=true
+                ;;
+        esac
+    fi
+    
+    if [[ "$success" == "true" ]]; then
+        log_success "Output volume $action"
+    else
+        log_warning "Output volume $action failed"
+    fi
+    
+    return $([ "$success" == "true" ] && echo 0 || echo 1)
+}
+
+# Function to control input (microphone) volume
+control_input_volume() {
+    local action="$1"
+    local value="$2"
+    local success=false
+    
+    if [[ "$PAMIXER_AVAILABLE" == "true" ]]; then
+        case "$action" in
+            up|raise|+*)
+                pamixer --source --increase 5 >/dev/null 2>&1 && success=true
+                ;;
+            down|lower|-*)
+                pamixer --source --decrease 5 >/dev/null 2>&1 && success=true
+                ;;
+            set)
+                if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]; then
+                    pamixer --source --set-volume "$value" >/dev/null 2>&1 && success=true
+                fi
+                ;;
+            mute)
+                pamixer --source --mute >/dev/null 2>&1 && success=true
+                ;;
+            unmute)
+                pamixer --source --unmute >/dev/null 2>&1 && success=true
+                ;;
+            toggle-mute)
+                pamixer --source --toggle-mute >/dev/null 2>&1 && success=true
+                ;;
+            get)
+                pamixer --source --get-volume 2>/dev/null
+                return $?
+                ;;
+            get-mute)
+                pamixer --source --get-mute 2>/dev/null
+                return $?
+                ;;
+        esac
+    elif [[ "$AUDIO_SYSTEM" == "pulseaudio" ]]; then
+        # Fallback to direct PulseAudio commands
+        case "$action" in
+            up|raise|+*)
+                pactl set-source-volume @DEFAULT_SOURCE@ +5% >/dev/null 2>&1 && success=true
+                ;;
+            down|lower|-*)
+                pactl set-source-volume @DEFAULT_SOURCE@ -5% >/dev/null 2>&1 && success=true
+                ;;
+            set)
+                if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]; then
+                    pactl set-source-volume @DEFAULT_SOURCE@ "$value%" >/dev/null 2>&1 && success=true
+                fi
+                ;;
+            mute)
+                pactl set-source-mute @DEFAULT_SOURCE@ 1 >/dev/null 2>&1 && success=true
+                ;;
+            unmute)
+                pactl set-source-mute @DEFAULT_SOURCE@ 0 >/dev/null 2>&1 && success=true
+                ;;
+            toggle-mute)
+                pactl set-source-mute @DEFAULT_SOURCE@ toggle >/dev/null 2>&1 && success=true
+                ;;
+        esac
+    fi
+    
+    if [[ "$success" == "true" ]]; then
+        log_success "Input volume $action"
+    else
+        log_warning "Input volume $action failed"
+    fi
+    
+    return $([ "$success" == "true" ] && echo 0 || echo 1)
+}
+
+# Function to control media playback
+control_media() {
+    local action="$1"
+    local success=false
+    
+    if command -v playerctl >/dev/null 2>&1; then
+        case "$action" in
+            play)
+                playerctl play >/dev/null 2>&1 && success=true
+                ;;
+            pause)
+                playerctl pause >/dev/null 2>&1 && success=true
+                ;;
+            play-pause|toggle)
+                playerctl play-pause >/dev/null 2>&1 && success=true
+                ;;
+            next)
+                playerctl next >/dev/null 2>&1 && success=true
+                ;;
+            previous|prev)
+                playerctl previous >/dev/null 2>&1 && success=true
+                ;;
+            stop)
+                playerctl stop >/dev/null 2>&1 && success=true
+                ;;
+            status)
+                playerctl status 2>/dev/null
+                return $?
+                ;;
+        esac
+    fi
+    
+    if [[ "$success" == "true" ]]; then
+        log_success "Media $action"
+    else
+        log_warning "Media $action failed"
+    fi
+    
+    return $([ "$success" == "true" ] && echo 0 || echo 1)
+}
+
+# Function to list audio devices
+list_audio_devices() {
+    echo "=== Audio Devices ==="
+    
+    if [[ "$PAMIXER_AVAILABLE" == "true" ]]; then
+        echo "Output devices:"
+        pamixer --list-sinks 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+        
+        echo ""
+        echo "Input devices:"
+        pamixer --list-sources 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+    elif [[ "$AUDIO_SYSTEM" == "pulseaudio" ]]; then
+        echo "Output devices:"
+        pactl list short sinks 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+        
+        echo ""
+        echo "Input devices:"
+        pactl list short sources 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+    fi
+    
+    if [[ -n "${AUDIO_CARDS[*]}" ]]; then
+        echo ""
+        echo "ALSA cards:"
+        for card in "${AUDIO_CARDS[@]}"; do
+            echo "  $card"
+        done
+    fi
+}
+
+# Function to get audio status
+get_audio_status() {
+    echo "=== Audio Status ==="
+    
+    if [[ "$AUDIO_CONTROL_READY" == "true" ]]; then
+        # Output status
+        local output_volume=$(control_output_volume get 2>/dev/null || echo "N/A")
+        local output_muted=$(control_output_volume get-mute 2>/dev/null || echo "unknown")
+        [[ "$output_muted" == "true" ]] && output_muted="MUTED" || output_muted="unmuted"
+        echo "Output: $output_volume% ($output_muted)"
+        
+        # Input status
+        local input_volume=$(control_input_volume get 2>/dev/null || echo "N/A")
+        local input_muted=$(control_input_volume get-mute 2>/dev/null || echo "unknown")
+        [[ "$input_muted" == "true" ]] && input_muted="MUTED" || input_muted="unmuted"
+        echo "Input: $input_volume% ($input_muted)"
+        
+        # Media status
+        if command -v playerctl >/dev/null 2>&1; then
+            local media_status=$(control_media status 2>/dev/null || echo "No media")
+            echo "Media: $media_status"
+        fi
+    else
+        echo "Audio system not ready"
+        echo "Audio system: $AUDIO_SYSTEM"
+        echo "Pamixer available: $PAMIXER_AVAILABLE"
+    fi
+}
+
+# Function to trigger SwayOSD feedback
+trigger_audio_osd() {
+    local type="$1"
+    
+    if [[ "$SWAYOSD_AVAILABLE" == "true" ]]; then
+        case "$type" in
+            output-volume)
+                local monitor=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused == true).name' 2>/dev/null || echo "")
+                if [[ -n "$monitor" ]]; then
+                    swayosd-client --monitor "$monitor" --output-volume raise >/dev/null 2>&1 ||
+                    swayosd-client --output-volume raise >/dev/null 2>&1
+                else
+                    swayosd-client --output-volume raise >/dev/null 2>&1
+                fi
+                ;;
+            input-volume)
+                local monitor=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused == true).name' 2>/dev/null || echo "")
+                if [[ -n "$monitor" ]]; then
+                    swayosd-client --monitor "$monitor" --input-volume raise >/dev/null 2>&1 ||
+                    swayosd-client --input-volume raise >/dev/null 2>&1
+                else
+                    swayosd-client --input-volume raise >/dev/null 2>&1
+                fi
+                ;;
+        esac
+    fi
+}
+
+# Usage information
+show_usage() {
+    cat << EOF
+Usage: $(basename "$0") <target> <action> [value]
+
+Targets:
+  output, volume      Output/speaker volume
+  input, mic          Input/microphone volume
+  media, player       Media player control
+
+Actions:
+  up, raise, +N       Increase volume/control
+  down, lower, -N     Decrease volume/control
+  set N               Set volume to N%
+  mute                Mute audio
+  unmute              Unmute audio
+  toggle-mute         Toggle mute state
+  get                 Get current volume
+  status              Show detailed status
+
+Media actions:
+  play                Start playback
+  pause               Pause playback
+  play-pause, toggle  Toggle play/pause
+  next                Next track
+  previous, prev      Previous track
+  stop                Stop playback
+
+Special commands:
+  status              Show all audio status
+  devices             List audio devices
+  help                Show this help message
+
+Examples:
+  $(basename "$0") output up              # Increase output volume
+  $(basename "$0") input toggle-mute      # Toggle microphone mute
+  $(basename "$0") output set 50          # Set volume to 50%
+  $(basename "$0") media play-pause       # Toggle media playback
+  $(basename "$0") status                 # Show all audio status
+
+Hardware Status:
+  Audio system: $AUDIO_SYSTEM
+  Pamixer available: $PAMIXER_AVAILABLE
+  SwayOSD available: $SWAYOSD_AVAILABLE
+  System ready: $AUDIO_CONTROL_READY
+EOF
+}
+
+# Main execution
+main() {
+    local target="$1"
+    local action="$2"
+    local value="$3"
+    
+    # Handle special single-argument commands
+    case "$target" in
+        status)
+            get_audio_status
+            exit 0
+            ;;
+        devices)
+            list_audio_devices
+            exit 0
+            ;;
+        help|--help|-h)
+            show_usage
+            exit 0
+            ;;
+    esac
+    
+    # Handle two-argument commands
+    if [[ -z "$action" ]]; then
+        log_error "Action required"
+        show_usage
+        exit 1
+    fi
+    
+    case "$target" in
+        output|volume|speaker)
+            control_output_volume "$action" "$value"
+            [[ "$?" -eq 0 ]] && trigger_audio_osd "output-volume"
+            ;;
+        input|mic|microphone)
+            control_input_volume "$action" "$value"
+            [[ "$?" -eq 0 ]] && trigger_audio_osd "input-volume"
+            ;;
+        media|player)
+            control_media "$action"
+            ;;
+        *)
+            log_error "Unknown target: $target"
+            show_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Execute main function with all arguments
+main "$@"

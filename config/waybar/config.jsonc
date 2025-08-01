@@ -14,6 +14,7 @@
     "group/tray-expander",
     "bluetooth",
     "network",
+    "backlight",
     "pulseaudio",
     "cpu",
     "battery"
@@ -124,5 +125,15 @@
   "tray": {
     "icon-size": 12,
     "spacing": 12
+  },
+  "backlight": {
+    "device": "auto",
+    "format": "{icon}",
+    "format-icons": ["", "", "", "", "", "", "", "", ""],
+    "tooltip-format": "Brightness: {percent}%",
+    "scroll-step": 10,
+    "on-click": "~/.local/share/omarchy/bin/omarchy-cmd-brightness-menu",
+    "on-scroll-up": "~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness up",
+    "on-scroll-down": "~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness down"
   }
 }

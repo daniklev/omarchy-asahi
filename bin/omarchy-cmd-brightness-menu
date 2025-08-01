@@ -1,0 +1,60 @@
+#!/bin/bash
+# Interactive brightness menu for Waybar integration
+# Provides a simple menu for brightness control on MacBook Pro M1
+
+# Source hardware configuration
+HARDWARE_CONF="$HOME/.config/omarchy/hardware.conf"
+if [[ -f "$HARDWARE_CONF" ]]; then
+    source "$HARDWARE_CONF"
+fi
+
+# Create a simple rofi/wofi menu for brightness control
+if command -v rofi >/dev/null 2>&1; then
+    MENU_CMD="rofi -dmenu -p 'Brightness' -theme-str 'window {width: 300px;}'"
+elif command -v wofi >/dev/null 2>&1; then
+    MENU_CMD="wofi --dmenu --prompt 'Brightness' --width 300"
+elif command -v walker >/dev/null 2>&1; then
+    # Use walker if available (omarchy default)
+    walker --dmenu --prompt 'Brightness: '
+    exit 0
+else
+    # Fallback to zenity
+    MENU_CMD="zenity --list --title='Brightness Control' --column='Option'"
+fi
+
+# Menu options
+OPTIONS="Increase Brightness
+Decrease Brightness
+Set to 25%
+Set to 50%
+Set to 75%
+Set to 100%
+Show Status"
+
+# Display menu and get selection
+SELECTION=$(echo "$OPTIONS" | eval "$MENU_CMD")
+
+# Execute based on selection
+case "$SELECTION" in
+    "Increase Brightness")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness up
+        ;;
+    "Decrease Brightness")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness down
+        ;;
+    "Set to 25%")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness set 25
+        ;;
+    "Set to 50%")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness set 50
+        ;;
+    "Set to 75%")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness set 75
+        ;;
+    "Set to 100%")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness set 100
+        ;;
+    "Show Status")
+        ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness status | zenity --text-info --title="Brightness Status" --width=400 --height=300
+        ;;
+esac

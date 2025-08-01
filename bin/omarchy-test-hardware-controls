@@ -1,0 +1,448 @@
+#!/bin/bash
+# Hardware control testing suite for MacBook Pro M1
+# Tests brightness controls, audio interfaces, and desktop integration
+# Part of the omarchy-asahi hardware validation framework
+
+# Source hardware configuration
+HARDWARE_CONF="$HOME/.config/omarchy/hardware.conf"
+if [[ -f "$HARDWARE_CONF" ]]; then
+    source "$HARDWARE_CONF"
+else
+    echo "Hardware configuration not found. Running detection first..."
+    ~/.local/share/omarchy/install/config/hardware-detection.sh
+    if [[ -f "$HARDWARE_CONF" ]]; then
+        source "$HARDWARE_CONF"
+    else
+        echo "Hardware detection failed. Exiting."
+        exit 1
+    fi
+fi
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Test counters
+TESTS_TOTAL=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+TESTS_SKIPPED=0
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[PASS]${NC} $1"
+    ((TESTS_PASSED++))
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[FAIL]${NC} $1"
+    ((TESTS_FAILED++))
+}
+
+log_skip() {
+    echo -e "${PURPLE}[SKIP]${NC} $1"
+    ((TESTS_SKIPPED++))
+}
+
+log_test() {
+    echo -e "${CYAN}[TEST]${NC} $1"
+    ((TESTS_TOTAL++))
+}
+
+# Test brightness control functionality
+test_brightness_controls() {
+    log_info "=== Testing Brightness Controls ==="
+    
+    # Test internal brightness
+    if [[ "$INTERNAL_BACKLIGHT" == "true" ]]; then
+        log_test "Internal brightness control"
+        if ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness get internal >/dev/null 2>&1; then
+            log_success "Internal brightness control available"
+        else
+            log_error "Internal brightness control failed"
+        fi
+    else
+        log_test "Internal brightness control"
+        log_skip "Internal brightness not available on this hardware"
+    fi
+    
+    # Test external Apple display brightness
+    if [[ "$EXTERNAL_APPLE_DISPLAY" == "true" ]]; then
+        log_test "External Apple display brightness"
+        if ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness get external >/dev/null 2>&1; then
+            log_success "External Apple display brightness control available"
+        else
+            log_error "External Apple display brightness control failed"
+        fi
+    else
+        log_test "External Apple display brightness"
+        log_skip "External Apple display not detected"
+    fi
+    
+    # Test keyboard backlight
+    if [[ "$KEYBOARD_BACKLIGHT" == "true" ]]; then
+        log_test "Keyboard backlight control"
+        if ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness get keyboard >/dev/null 2>&1; then
+            log_success "Keyboard backlight control available"
+        else
+            log_error "Keyboard backlight control failed"
+        fi
+    else
+        log_test "Keyboard backlight control"
+        log_skip "Keyboard backlight not available on this hardware"
+    fi
+    
+    # Test unified brightness control
+    log_test "Unified brightness control status"
+    if ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness status >/dev/null 2>&1; then
+        log_success "Unified brightness control script working"
+    else
+        log_error "Unified brightness control script failed"
+    fi
+}
+
+# Test audio control functionality
+test_audio_controls() {
+    log_info "=== Testing Audio Controls ==="
+    
+    # Test audio system detection
+    log_test "Audio system detection"
+    if [[ "$AUDIO_SYSTEM" != "none" ]]; then
+        log_success "Audio system detected: $AUDIO_SYSTEM"
+    else
+        log_error "No audio system detected"
+    fi
+    
+    # Test pamixer availability
+    log_test "Pamixer availability"
+    if [[ "$PAMIXER_AVAILABLE" == "true" ]]; then
+        log_success "Pamixer command available"
+    else
+        log_error "Pamixer command not available"
+    fi
+    
+    # Test output volume control
+    if [[ "$AUDIO_CONTROL_READY" == "true" ]]; then
+        log_test "Output volume control"
+        if ~/.local/share/omarchy/bin/omarchy-cmd-enhanced-audio output get >/dev/null 2>&1; then
+            log_success "Output volume control working"
+        else
+            log_error "Output volume control failed"
+        fi
+        
+        log_test "Input volume control"
+        if ~/.local/share/omarchy/bin/omarchy-cmd-enhanced-audio input get >/dev/null 2>&1; then
+            log_success "Input volume control working"
+        else
+            log_error "Input volume control failed"
+        fi
+    else
+        log_test "Audio control readiness"
+        log_skip "Audio system not ready for testing"
+    fi
+    
+    # Test media control
+    log_test "Media control functionality"
+    if command -v playerctl >/dev/null 2>&1; then
+        if ~/.local/share/omarchy/bin/omarchy-cmd-enhanced-audio media status >/dev/null 2>&1; then
+            log_success "Media control available"
+        else
+            log_warning "Media control available but no active players"
+        fi
+    else
+        log_error "Media control (playerctl) not available"
+    fi
+}
+
+# Test desktop integration
+test_desktop_integration() {
+    log_info "=== Testing Desktop Integration ==="
+    
+    # Test SwayOSD availability
+    log_test "SwayOSD client availability"
+    if [[ "$SWAYOSD_AVAILABLE" == "true" ]]; then
+        log_success "SwayOSD client available"
+    else
+        log_error "SwayOSD client not available"
+    fi
+    
+    # Test SwayOSD server status
+    log_test "SwayOSD server status"
+    if [[ "$SWAYOSD_RUNNING" == "true" ]]; then
+        log_success "SwayOSD server running"
+    else
+        log_warning "SwayOSD server not running"
+    fi
+    
+    # Test Hyprland availability
+    log_test "Hyprland availability"
+    if [[ "$HYPRLAND_AVAILABLE" == "true" ]]; then
+        log_success "Hyprland available"
+    else
+        log_warning "Hyprland not available"
+    fi
+    
+    # Test Hyprland running status
+    log_test "Hyprland running status"
+    if [[ "$HYPRLAND_RUNNING" == "true" ]]; then
+        log_success "Hyprland is running"
+    else
+        log_warning "Hyprland not currently running"
+    fi
+    
+    # Test existing omarchy brightness script
+    log_test "Existing omarchy brightness script"
+    if [[ "$OMARCHY_BRIGHTNESS_SCRIPT" == "true" ]]; then
+        log_success "Existing omarchy brightness script found"
+    else
+        log_warning "Existing omarchy brightness script not found"
+    fi
+    
+    # Test Hyprland key bindings
+    if [[ "$HYPRLAND_RUNNING" == "true" ]]; then
+        log_test "Hyprland key bindings"
+        if [[ -f ~/.config/hypr/bindings/media.conf ]] || [[ -f ~/.local/share/omarchy/default/hypr/bindings/media.conf ]]; then
+            log_success "Hyprland media key bindings configured"
+        else
+            log_warning "Hyprland media key bindings not found"
+        fi
+    else
+        log_test "Hyprland key bindings"
+        log_skip "Hyprland not running - cannot test key bindings"
+    fi
+}
+
+# Test hardware-specific functionality
+test_hardware_specific() {
+    log_info "=== Testing Hardware-Specific Features ==="
+    
+    # Test Apple Silicon detection
+    log_test "Apple Silicon detection"
+    if [[ "$IS_APPLE_SILICON" == "true" ]]; then
+        log_success "Apple Silicon system detected"
+    else
+        log_warning "Not detected as Apple Silicon system"
+    fi
+    
+    # Test F-key configuration (important for MacBook)
+    log_test "F-key configuration"
+    if [[ -f /sys/module/hid_apple/parameters/fnmode ]]; then
+        local fnmode=$(cat /sys/module/hid_apple/parameters/fnmode 2>/dev/null || echo "unknown")
+        if [[ "$fnmode" == "2" ]]; then
+            log_success "F-keys configured correctly (fnmode=2)"
+        else
+            log_warning "F-keys may not be configured optimally (fnmode=$fnmode)"
+        fi
+    else
+        log_test "F-key configuration"
+        log_skip "F-key configuration not available (not applicable or not loaded)"
+    fi
+    
+    # Test ALSA cards
+    log_test "ALSA card detection"
+    if [[ -n "${AUDIO_CARDS[*]}" ]]; then
+        log_success "ALSA cards detected: ${#AUDIO_CARDS[@]} cards"
+        for card in "${AUDIO_CARDS[@]}"; do
+            log_info "  Found: $card"
+        done
+    else
+        log_warning "No ALSA cards detected"
+    fi
+}
+
+# Interactive test mode
+run_interactive_tests() {
+    log_info "=== Interactive Hardware Tests ==="
+    echo "This will test hardware controls interactively."
+    echo "You should see/hear changes when prompted."
+    echo ""
+    
+    # Test brightness controls interactively
+    if [[ "$INTERNAL_BACKLIGHT" == "true" ]] || [[ "$EXTERNAL_APPLE_DISPLAY" == "true" ]]; then
+        read -p "Test brightness controls? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_test "Interactive brightness test"
+            echo "Increasing brightness..."
+            ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness up
+            sleep 2
+            echo "Decreasing brightness..."
+            ~/.local/share/omarchy/bin/omarchy-cmd-unified-brightness down
+            
+            read -p "Did you see brightness changes? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                log_success "Interactive brightness test passed"
+            else
+                log_error "Interactive brightness test failed"
+            fi
+        else
+            log_test "Interactive brightness test"
+            log_skip "Interactive brightness test skipped by user"
+        fi
+    fi
+    
+    # Test audio controls interactively
+    if [[ "$AUDIO_CONTROL_READY" == "true" ]]; then
+        read -p "Test audio controls? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_test "Interactive audio test"
+            echo "Increasing volume..."
+            ~/.local/share/omarchy/bin/omarchy-cmd-enhanced-audio output up
+            sleep 1
+            echo "Decreasing volume..."
+            ~/.local/share/omarchy/bin/omarchy-cmd-enhanced-audio output down
+            
+            read -p "Did you hear volume changes? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                log_success "Interactive audio test passed"
+            else
+                log_error "Interactive audio test failed"
+            fi
+        else
+            log_test "Interactive audio test"
+            log_skip "Interactive audio test skipped by user"
+        fi
+    fi
+}
+
+# Generate test report
+generate_report() {
+    echo ""
+    log_info "=== Test Report ==="
+    echo -e "Total tests: ${CYAN}$TESTS_TOTAL${NC}"
+    echo -e "Passed: ${GREEN}$TESTS_PASSED${NC}"
+    echo -e "Failed: ${RED}$TESTS_FAILED${NC}"
+    echo -e "Skipped: ${PURPLE}$TESTS_SKIPPED${NC}"
+    
+    local pass_rate=0
+    if [[ $TESTS_TOTAL -gt 0 ]]; then
+        pass_rate=$((TESTS_PASSED * 100 / TESTS_TOTAL))
+    fi
+    
+    echo -e "Pass rate: ${CYAN}${pass_rate}%${NC}"
+    
+    if [[ $TESTS_FAILED -eq 0 ]]; then
+        log_success "All tests passed!"
+        return 0
+    else
+        log_error "$TESTS_FAILED tests failed"
+        return 1
+    fi
+}
+
+# Show usage information
+show_usage() {
+    cat << EOF
+Usage: $(basename "$0") [options]
+
+Options:
+  --basic         Run basic functionality tests only
+  --interactive   Run interactive tests (requires user input)
+  --full          Run full test suite (default)
+  --report-only   Generate report from existing hardware config
+  --help          Show this help message
+
+Examples:
+  $(basename "$0")              # Run full test suite
+  $(basename "$0") --basic      # Run basic tests only
+  $(basename "$0") --interactive # Run interactive tests
+
+Test Categories:
+  - Brightness controls (internal, external, keyboard)
+  - Audio controls (output, input, media)
+  - Desktop integration (SwayOSD, Hyprland)
+  - Hardware-specific features (Apple Silicon, F-keys)
+
+Hardware Status:
+  System: $SYSTEM_PRODUCT
+  Apple Silicon: $IS_APPLE_SILICON
+  Brightness methods: $(( [[ "$INTERNAL_BACKLIGHT" == "true" ]] && echo 1 || echo 0 )) internal + $(( [[ "$EXTERNAL_APPLE_DISPLAY" == "true" ]] && echo 1 || echo 0 )) external + $(( [[ "$KEYBOARD_BACKLIGHT" == "true" ]] && echo 1 || echo 0 )) keyboard
+  Audio system: $AUDIO_SYSTEM
+  System ready: $SYSTEM_READY
+EOF
+}
+
+# Main execution
+main() {
+    local mode="full"
+    
+    case "$1" in
+        --basic)
+            mode="basic"
+            ;;
+        --interactive)
+            mode="interactive"
+            ;;
+        --full)
+            mode="full"
+            ;;
+        --report-only)
+            mode="report"
+            ;;
+        --help|-h)
+            show_usage
+            exit 0
+            ;;
+        "")
+            mode="full"
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+    
+    echo "🔧 Omarchy Hardware Control Test Suite"
+    echo "Testing hardware controls for MacBook Pro M1"
+    echo "Mode: $mode"
+    echo ""
+    log_info "System: $SYSTEM_PRODUCT"
+    log_info "Hardware config: $HARDWARE_CONF"
+    echo ""
+    
+    case "$mode" in
+        basic)
+            test_brightness_controls
+            test_audio_controls
+            ;;
+        interactive)
+            test_brightness_controls
+            test_audio_controls
+            test_desktop_integration
+            run_interactive_tests
+            ;;
+        full)
+            test_brightness_controls
+            test_audio_controls
+            test_desktop_integration
+            test_hardware_specific
+            ;;
+        report)
+            log_info "Hardware configuration report:"
+            cat "$HARDWARE_CONF"
+            exit 0
+            ;;
+    esac
+    
+    generate_report
+    exit $?
+}
+
+# Execute main function with all arguments
+main "$@"
